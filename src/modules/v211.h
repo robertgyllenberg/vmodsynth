@@ -1,5 +1,7 @@
 /*
-    Copyright (C) 2012, 2013 Rafał Cieślak
+    Copyright (C) 2016 Robert Gyllenberg
+
+    extends Module class by Rafał Cieślak 2012, 2013
 
     This file is part of vModSynth.
 
@@ -17,31 +19,24 @@
     along with vModSynth.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef MODULE_LIST_H
-#define MODULE_LIST_H
 
-#include "Module.h"
+#ifndef V211_H
+#define V211_H
 
-enum ModuleList{
-    V100 = 100,
-    V101 = 101,
-    V200 = 200,
-    V201 = 201,
-    V203 = 203,
-    V210 = 210,
-    V211 = 211,
-    V212 = 212,
-    V213 = 213,
-    V230 = 230,
-    V300 = 300,
-    V400 = 400,
-    V701 = 701,
-    V702 = 702,
-    V703 = 703,
-    V1001 = 1001,
-    V1005 = 1005
+#include "../Module.h"
+
+/*
+ * Summing module with four inputs and three outputs, gain -12dB
+ */
+class v211 : public Module
+{
+    public:
+        v211();
+        virtual ~v211();
+        void dsp();
+        void draw(const Cairo::RefPtr<Cairo::Context>& cr);
+    protected:
+    private:
 };
 
-Module* create_new_module_from_ID(int ID);
-
-#endif // MODULE_LIST_H
+#endif // V211_H
