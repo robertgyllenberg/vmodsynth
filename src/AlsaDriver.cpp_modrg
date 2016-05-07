@@ -1,0 +1,285 @@
+/*
+    Copyright (C) 2012, 2013 Rafał Cieślak
+
+    This file is part of vModSynth.
+
+    vModSynth is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    vModSynth is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with vModSynth.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+
+int buf_ptr = 0;
+
+#include <iostream>
+#include <gtkmm/main.h>
+#include <alsa/asoundlib.h>
+#include <cmath>
+#include <cstring>
+#include "AlsaDriver.h"
+#include "Engine.h"
+
+/* For jack */
+#include <stdio.h>
+#include <errno.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include <jack/jack.h>
+
+// Jack code here:
+
+#define BUFFER_SIZE 1024
+
+jack_default_audio_sample_t sound_buffer_l[BUFFER_SIZE];
+jack_default_audio_sample_t sound_buffer_r[BUFFER_SIZE];
+
+jack_port_t *output_port_l;
+jack_port_t *output_port_r;
+jack_client_t *client;
+
+int jack_process (jack_nframes_t nframes, void *arg)
+//Jack process callback
+{
+    jack_default_audio_sample_t *out_l, *out_r;
+    out_l = (jack_default_audio_sample_t*) jack_port_get_buffer (output_port_l, nframes);
+    out_r = (jack_default_audio_sample_t*) jack_port_get_buffer (output_port_r, nframes);
+    buf_ptr=0;
+    for (int i=0;i<1024;i++)
+    {
+      Engine::do_dsp_cycle();
+    }
+    memcpy (out_l, (const void*)sound_buffer_l, 1024*4);
+    memcpy (out_r, (const void*)sound_buffer_r, 1024*4);
+    return 0;      
+}
+
+void jack_shutdown (void *arg)
+//Jack shutdown callback
+{
+    exit (1);
+}
+
+
+extern bool quit_threads;
+
+namespace AlsaDriver{
+
+snd_pcm_t *pcm_handle;
+snd_seq_t *seq_handle;
+
+
+void open_seq(){
+    if(snd_seq_open(&seq_handle,"default",SND_SEQ_OPEN_INPUT,0) < 0){
+        std::cout << "Failed to open ALSA sequencer.\n";
+        return;
+    }
+    snd_seq_set_client_name(seq_handle,"vmodsynth");
+    snd_seq_create_simple_port(seq_handle, "vmodsynth", SND_SEQ_PORT_CAP_WRITE|
+                                                        SND_SEQ_PORT_CAP_SUBS_WRITE, SND_SEQ_PORT_TYPE_SYNTHESIZER|
+                                                                                     SND_SEQ_PORT_TYPE_SOFTWARE|
+                                                                                     SND_SEQ_PORT_TYPE_APPLICATION|
+                                                                                     SND_SEQ_PORT_TYPE_MIDI_GENERIC);
+
+}
+
+const short short_max = ((int)2<<14) - (int)1;
+//const short short_min = ((int)2<<14) + (int)1;
+
+void add_sample(double l, double r){
+    int s_l = (l)*(2<<14); 
+    // 2<<16 is the range of short. In fact, a 4 times smaller range is used here, 
+    //so that it covers negative q value too (plus one bit is in fact lost because of the way ALSA uses the buffer)
+
+    if (l >= 1.0) s_l = short_max;
+    int s_r = (r)*(2<<14);
+    if (r >= 1.0) s_r = short_max;
+
+    sound_buffer_l[buf_ptr] = s_l;
+    sound_buffer_r[buf_ptr] = s_r;
+    sound_buffer_l[buf_ptr] = l;
+    sound_buffer_r[buf_ptr] = r;
+    buf_ptr++;
+}
+
+int last_note_pitch[17];
+int last_note_velocity[17];
+int notes_on[17];
+
+void midi_input(){
+    snd_seq_event_t* ev;
+    do{
+        snd_seq_event_input(seq_handle,&ev);
+        int channel = ev->data.note.channel + 1;
+        switch(ev->type){
+            case SND_SEQ_EVENT_NOTEON:
+                if(ev->data.note.velocity != 0){
+                    last_note_pitch[0]    = ev->data.note.note;
+                    last_note_velocity[0] = ev->data.note.velocity;
+                    last_note_pitch[channel]    = ev->data.note.note;
+                    last_note_velocity[channel] = ev->data.note.velocity;
+                    notes_on[0]++;
+                    notes_on[channel]++;
+                }else{
+                    notes_on[0]--;
+                    notes_on[channel]--;
+                    if(notes_on[0] == 0)
+                        last_note_velocity[0] = 0;
+                    if(notes_on[channel] == 0)
+                        last_note_velocity[channel] = 0;
+                }
+                break;
+            case SND_SEQ_EVENT_NOTEOFF:
+                notes_on[0]--;
+                notes_on[channel]--;
+                if(notes_on[0] == 0)
+                    last_note_velocity[0] = 0;
+                if(notes_on[channel] == 0)
+                    last_note_velocity[channel] = 0;
+                break;
+            case SND_SEQ_EVENT_CONTROLLER:
+                for(auto &k : Engine::knobs){
+                    if(k->controlled && (k->channel == 0 || k->channel == ev->data.control.channel + 1) && k->controller == ev->data.control.param){
+                        k->set_value_from_controller(ev->data.control.value);
+                    }
+                }
+                break;
+        }
+    }while (snd_seq_event_input_pending(seq_handle,0) > 0);
+}
+
+int get_last_note_pitch(int ch){
+    return last_note_pitch[ch];
+}
+
+int get_last_note_velocity(int ch){
+    return last_note_velocity[ch];
+}
+
+int get_notes_on(int ch){
+    return last_note_velocity[ch];
+}
+
+void thread_jack(char* device){
+    //Adopted from jack example "simple.c"
+
+    std::cerr << "Jack buffer size" << sizeof (jack_default_audio_sample_t)  << "\n";    
+    const char **ports;
+    const char *client_name = "vmodsynth";
+    const char *server_name = NULL;
+    jack_options_t options = JackNullOption;
+    jack_status_t status;
+	
+    /* open a client connection to the JACK server */
+    client = jack_client_open (client_name, options, &status, server_name);
+    if (client == NULL) {
+        fprintf (stderr, "jack_client_open() failed, "
+        "status = 0x%2.0x\n", status);
+        if (status & JackServerFailed) {
+            fprintf (stderr, "Unable to connect to JACK server\n");
+            }
+            exit (1);
+        }
+        if (status & JackServerStarted) {
+            fprintf (stderr, "JACK server started\n");
+            }
+        if (status & JackNameNotUnique) {
+            client_name = jack_get_client_name(client);
+            fprintf (stderr, "unique name `%s' assigned\n", client_name);
+            }
+
+        /* tell the JACK server to call `process()' whenever
+           there is work to be done.
+        */
+
+        jack_set_process_callback (client, jack_process, 0);
+
+        /* tell the JACK server to call `jack_shutdown()' if
+           it ever shuts down, either entirely, or if it
+           just decides to stop calling us.
+         */
+
+         jack_on_shutdown (client, jack_shutdown, 0);
+         /* display the current sample rate.  */
+
+         std::cerr << "engine sample rate: %" << jack_get_sample_rate (client) << "\n";
+
+         /* create two ports */
+
+         output_port_l = jack_port_register (client, "output L", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+         output_port_r = jack_port_register (client, "output R", JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput, 0);
+
+         if ((output_port_l == NULL) || (output_port_r == NULL)) {
+             fprintf(stderr, "no more JACK ports available\n");
+             exit (1);
+             }
+
+         /* Tell the JACK server that we are ready to roll.  Our
+            * process() callback will start running now. */
+
+         if (jack_activate (client)) {
+             fprintf (stderr, "cannot activate client");
+             exit (1);
+             }
+
+            /* Connect the ports.  You can't do this before the client is
+             * activated, because we can't make connections to clients
+             * that aren't running.  Note the confusing (but necessary)
+             * orientation of the driver backend ports: playback ports are
+             * "input" to the backend, and capture ports are "output" from
+             * it.
+             */
+
+            /* keep running until stopped by the user */
+
+
+
+            while(!quit_threads){
+                sleep (-1);
+
+                /* this is never reached but if the program
+                   had some other way to exit besides being killed,
+                   they would be important to call.
+                 */
+                jack_client_close (client);
+                exit (0);
+                }
+
+};
+
+void thread_alsamidi(char* device)
+   {
+    open_seq();
+    //if(!pcm_handle || !seq_handle) return;
+    int nfds, seq_nfds, l1;
+    struct pollfd *pfds;
+    seq_nfds = snd_seq_poll_descriptors_count(seq_handle,POLLIN);
+    pfds = (struct pollfd *)alloca(sizeof(struct pollfd) * (nfds + seq_nfds));
+    snd_seq_poll_descriptors(seq_handle,pfds,seq_nfds,POLLIN);
+        //poll for incomming pcm interrupts
+        if (poll (pfds, seq_nfds + nfds, 1000) > 0) 
+        {
+            //for each event
+            for (l1 = 0; l1 < seq_nfds; l1++) 
+            {
+                if (pfds[l1].revents > 0)
+                    midi_input();
+            }
+        }
+    //snd_pcm_close(pcm_handle);
+    }
+
+} //namespace AlsaDriver
+
+

@@ -30,7 +30,8 @@
 
 extern bool quit_threads;
 
-namespace AlsaDriver{
+namespace AlsaDriver
+{
 
 snd_pcm_t *pcm_handle;
 snd_seq_t *seq_handle;
@@ -196,19 +197,26 @@ int playback () {
 }
 
 
-void thread_main(char* device){
+void alsa_thread_main(char* device, int mode) //mode 0: MIDI only, 1: MIDI and Alsa PCM
+{
 
-    open_pcm(device);
+    if(mode==1)
+       open_pcm(device);
     open_seq();
-    if(!pcm_handle || !seq_handle) return;
+
+    if( (!pcm_handle && mode==1) || !seq_handle) return;
 
     int nfds, seq_nfds, l1;
     struct pollfd *pfds;
 
+    if(mode==1)
     nfds = snd_pcm_poll_descriptors_count(pcm_handle);
+
     seq_nfds = snd_seq_poll_descriptors_count(seq_handle,POLLIN);
     pfds = (struct pollfd *)alloca(sizeof(struct pollfd) * (nfds + seq_nfds));
     snd_seq_poll_descriptors(seq_handle,pfds,seq_nfds,POLLIN);
+
+    if(mode==1)
     snd_pcm_poll_descriptors (pcm_handle, pfds + seq_nfds, nfds);
 
     while(!quit_threads){
@@ -223,7 +231,8 @@ void thread_main(char* device){
                 if (pfds[l1].revents > 0) {
                     //call playback callback
                     int r;
-                    if ((r = playback()) < BUFFER_SIZE) {
+                    if (((r = playback()) < BUFFER_SIZE) && (mode==1)) 
+                    {
                             snd_pcm_prepare(pcm_handle);
                             std::cout << "a XRUN occured! " << r << std::endl;
                     }
@@ -232,7 +241,8 @@ void thread_main(char* device){
         }
     }
 
-    snd_pcm_close(pcm_handle);
+    if(mode==1)
+      snd_pcm_close(pcm_handle);
 }
 
 } //namespace AlsaDriver

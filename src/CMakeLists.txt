@@ -4,7 +4,7 @@ add_definitions(
   )
 
 if(${CMAKE_BUILD_TYPE} MATCHES "Debug")
-  add_definitions(-g -Og -Wall -Wextra -Werror)
+  add_definitions(-g -Wall -Wextra)
 endif()
 
 if(${CMAKE_BUILD_TYPE} MATCHES "Release")
@@ -18,6 +18,7 @@ link_directories(
     ${GTKMM_LIBRARY_DIRS}
     ${CAIROMM_LIBRARY_DIRS}
     ${LIBXML++_LIBRARY_DIRS}
+    ${JACK_LIBRARY_DIRS}
 )
 
 include_directories( SYSTEM
@@ -25,6 +26,7 @@ include_directories( SYSTEM
     ${GTKMM_INCLUDE_DIRS}
     ${CAIROMM_INCLUDE_DIRS}
     ${LIBXML++_INCLUDE_DIRS}
+    ${JACK_INCLUDE_DIRS}
 )
 
 # Get the list of all module files
@@ -42,6 +44,7 @@ target_link_libraries( vmodsynth
     ${GTKMM_LIBRARIES}
     ${CAIROMM_LIBRARIES}
     ${LIBXML++_LIBRARIES}
+    ${JACK_LIBRARIES}
     ${CMAKE_THREAD_LIBS_INIT}
 )
 

@@ -1,7 +1,7 @@
 /*
-    Copyright (C) 2012, 2013 Rafał Cieślak
+    Copyright 2016 by Robert Gyllenberg
 
-    This file is part of vModSynth.
+    This file is part of vModSynth by Rafał Cieślak
 
     vModSynth is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -17,17 +17,13 @@
     along with vModSynth.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef ALSA_DRIVER_H
-#define ALSA_DRIVER_H
+#ifndef JACK_DRIVER_H
+#define JACK_DRIVER_H
 
-namespace AlsaDriver{
+namespace JackDriver{
 
-void alsa_thread_main(char *device, int mode); //mode 0: MIDI only, 1: MIDI and Alsa PCM
+void jack_thread_main();
 void add_sample(double l, double r);
 
-int get_last_note_pitch(int ch);
-int get_last_note_velocity(int ch);
-int get_notes_on(int ch);
-
 }
-#endif // ALSA_DRIVER_H
+#endif // JACK_DRIVER_H
