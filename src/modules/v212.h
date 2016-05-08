@@ -37,6 +37,7 @@ class v212 : public Module
         void draw(const Cairo::RefPtr<Cairo::Context>& cr);
     protected:
     private:
+        void draw_background(const Cairo::RefPtr<Cairo::Context>& cr, double grayness);
 };
 
 #endif // V212_H

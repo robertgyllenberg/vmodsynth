@@ -148,6 +148,27 @@ void v213::dsp(){
     outlets[1]->push_sample(last_voltage);
 }
 
+void v213::draw_background(const Cairo::RefPtr<Cairo::Context>& cr, double){
+    cr->save();
+    cr->set_source_rgb(60.0/256.0,60.0/256.0,100.0/256.0);
+    cr->move_to(xoffset                 + 1.5,                       1.5);
+    cr->line_to(xoffset                 + 1.5, MODULE_PANEL_HEIGHT - 1.5);
+    cr->line_to(xoffset + panel_width   + 0.5, MODULE_PANEL_HEIGHT - 1.5);
+    cr->line_to(xoffset + panel_width   + 0.5,                       1.5);
+    cr->close_path();
+    cr->fill_preserve();
+    if(highlight){
+        cr->set_line_width(3.0);
+        cr->set_source_rgb(0.4, 0.4, 0.8);
+
+    }else{
+        cr->set_line_width(1.0);
+        cr->set_source_rgb(0.0, 0.0, 0.0);
+    }
+    cr->stroke();
+    cr->restore();
+}
+
 void v213::draw(const Cairo::RefPtr<Cairo::Context>& cr){
     draw_background(cr,0.5);
     draw_caption_and_id(cr);

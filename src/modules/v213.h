@@ -44,6 +44,7 @@ class v213 : public Module
         std::vector<int> scale_5;
         std::vector<int> scale_7;
         int last_note;
+        void draw_background(const Cairo::RefPtr<Cairo::Context>& cr, double grayness);
 };
 
 #endif // V213_H
