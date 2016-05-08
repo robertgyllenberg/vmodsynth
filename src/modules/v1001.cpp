@@ -47,12 +47,12 @@ void v1001::dsp(){
         //stereo mode
         double l = amplitude*inlets[1]->pull_sample()/5.0;//input range is -5 to 5
         double r = amplitude*inlets[2]->pull_sample()/5.0;//input range is -5 to 5
-        AlsaDriver::add_sample(l,r);
+        //AlsaDriver::add_sample(l,r);
         JackDriver::add_sample(l,r);
     }else{
         //mono mode
         double s = amplitude*inlets[0]->pull_sample()/5.0;//input range is -5 to 5
-        AlsaDriver::add_sample(s,s);
+        //AlsaDriver::add_sample(s,s);
         JackDriver::add_sample(s,s);
     }
 }

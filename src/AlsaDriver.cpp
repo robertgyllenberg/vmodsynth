@@ -17,7 +17,6 @@
     along with vModSynth.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-
 #include <iostream>
 #include <gtkmm/main.h>
 #include <alsa/asoundlib.h>
@@ -32,13 +31,13 @@ extern bool quit_threads;
 
 namespace AlsaDriver
 {
-
 snd_pcm_t *pcm_handle;
 snd_seq_t *seq_handle;
 
 short sound_buffer[BUFFER_SIZE*2];
 
 int buf_ptr = 0;
+int mode = 0;
 
 void open_seq(){
     if(snd_seq_open(&seq_handle,"default",SND_SEQ_OPEN_INPUT,0) < 0){
@@ -51,7 +50,6 @@ void open_seq(){
                                                                                      SND_SEQ_PORT_TYPE_SOFTWARE|
                                                                                      SND_SEQ_PORT_TYPE_APPLICATION|
                                                                                      SND_SEQ_PORT_TYPE_MIDI_GENERIC);
-
 }
 
 void open_pcm(char *pcm) {
@@ -80,32 +78,20 @@ void open_pcm(char *pcm) {
     snd_pcm_sw_params_current(pcm_handle,swp);
     snd_pcm_sw_params_set_avail_min(pcm_handle,swp,BUFFER_SIZE);
     snd_pcm_sw_params(pcm_handle,swp);
-
 }
 
 const short short_max = ((int)2<<14) - (int)1;
-//const short short_min = ((int)2<<14) + (int)1;
 
 void add_sample(double l, double r){
+    if(mode == 0) return;
     if(buf_ptr >= 2*BUFFER_SIZE) return;
-    //std::cout << "adding sample " << buf_ptr << ": " << q << " (to "<< sound_buffer[buf_ptr  ] << ")" << "\n";
     int s_l = (l)*(2<<14); // 2<<16 is the range of short. In fact, a 4 times smaller range is used here, so that it covers negative q value too (plus one bit is in fact lost because of the way ALSA uses the buffer)
     if (l >= 1.0) s_l = short_max;
     int s_r = (r)*(2<<14);
     if (r >= 1.0) s_r = short_max;
 
-    /*s += sound_buffer[buf_ptr  ];
-    if (s > short_max) s = short_max;
-    if (s < short_min) s = short_min;
-    sound_buffer[buf_ptr  ] = s;
-    s += sound_buffer[buf_ptr+1];
-    if (s > short_max) s = short_max;
-    if (s < short_min) s = short_min;
-    sound_buffer[buf_ptr+1] = s; */
-
     sound_buffer[buf_ptr   ] += s_l;
     sound_buffer[buf_ptr +1] += s_r;
-    //std::cout << "now " << sound_buffer[buf_ptr  ] << "\n";
 }
 
 int last_note_pitch[17];
@@ -168,6 +154,7 @@ int get_notes_on(int ch){
 
 int playback () {
 
+    if (mode==0) return 0;
     //This is the single DSP iteration.
 
     //Begin by freezing the GTK/GDK internal loops, so that they do not cause race conditions while calculations take place.
@@ -197,21 +184,23 @@ int playback () {
 }
 
 
-void alsa_thread_main(char* device, int mode) //mode 0: MIDI only, 1: MIDI and Alsa PCM
+void alsa_thread_main(char* device, int the_mode) //mode 0: MIDI only, 1: MIDI and Alsa PCM
 {
+    mode = the_mode;
 
     if(mode==1)
        open_pcm(device);
     open_seq();
 
-    if( (!pcm_handle && mode==1) || !seq_handle) return;
+    //if( (!pcm_handle && mode==1) || !seq_handle) return;
 
     int nfds, seq_nfds, l1;
     struct pollfd *pfds;
 
+    nfds = 0;
     if(mode==1)
     nfds = snd_pcm_poll_descriptors_count(pcm_handle);
-
+   
     seq_nfds = snd_seq_poll_descriptors_count(seq_handle,POLLIN);
     pfds = (struct pollfd *)alloca(sizeof(struct pollfd) * (nfds + seq_nfds));
     snd_seq_poll_descriptors(seq_handle,pfds,seq_nfds,POLLIN);
@@ -228,7 +217,7 @@ void alsa_thread_main(char* device, int mode) //mode 0: MIDI only, 1: MIDI and A
                     midi_input();
             }
             for (l1 = seq_nfds; l1 < seq_nfds + nfds; l1++){
-                if (pfds[l1].revents > 0) {
+                if (pfds[l1].revents > 0 && mode==1) {
                     //call playback callback
                     int r;
                     if (((r = playback()) < BUFFER_SIZE) && (mode==1)) 

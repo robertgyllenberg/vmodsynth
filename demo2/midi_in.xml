@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<patch>
+  <modules><module name="MIDI input" type_id="1005"><knob n="0" value="0.000000"></knob></module><module name="ADSR envemope" type_id="230"><knob n="0" value="0.000000"></knob><knob n="1" value="0.000000"></knob><knob n="2" value="10.000000"></knob><knob n="3" value="0.000000"></knob></module><module name="Oscillator" type_id="100"><knob n="0" value="-0.105000"></knob><knob n="1" value="1.000000"></knob><knob n="2" value="0.000000"></knob><knob n="3" value="0.500000"></knob><knob n="4" value="0.000000"></knob><knob n="5" value="0.000000"></knob></module><module name="Amplifier" type_id="210"><knob n="0" value="5.000000"></knob><knob n="1" value="4.905000"></knob><knob n="2" value="1.000000"></knob></module><module name="Audio out" type_id="1001"><knob n="0" value="38.599998"></knob></module></modules>
+  <wires><wire src="1" sj="0" dst="3" dj="0"></wire><wire src="3" sj="0" dst="4" dj="0"></wire><wire src="0" sj="3" dst="1" dj="0"></wire><wire src="2" sj="2" dst="3" dj="2"></wire><wire src="0" sj="1" dst="2" dj="1"></wire></wires>
+</patch>
