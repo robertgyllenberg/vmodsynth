@@ -1,8 +1,17 @@
-vModSynth
+vModSynth 
+(this is an experimental features branch)
 ===
 a modular software synthesizer
 
-by Rafał Cieślak, 2012-2013
+Original work by Rafał Cieślak, 2012-2013
+Features added by Robert Gyllenberg 2016:
+
+File I/O, Jack audio, Experimental modules
+(Experimental modules that are not part of the original design, appear in a blue colour.)
+
+To use jack, run with single parameter 'jack', e.g.
+
+    ./vmodsynth jack
 
 Distributed on GNU GPL v3 license, see LICENSE file for details.
 
